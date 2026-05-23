@@ -29,6 +29,8 @@ docker-compose up --build
 
 Zero manual setup beyond adding API keys. One command, everything works.
 
+> **Hosting status:** Currently local-only (Docker Compose). Not deployed to any cloud provider. See [Deployment Options](#deployment-options) below.
+
 ## Architecture Overview
 
 ```
@@ -103,17 +105,49 @@ User → React UI (Vite :3000)
 | Groq + Gemini over Claude + OpenAI | Both have generous free tiers. Good enough for demos. Provider abstraction makes swapping trivial. |
 | `asyncpg` over `psycopg2` | True async I/O. Every database call is non-blocking in the FastAPI event loop. |
 
-## What I Would Improve With More Time
+## Future Improvements
 
-- **ClickHouse for analytics at scale** — at >10M logs/day, PostgreSQL percentiles get slow. ClickHouse is purpose-built for this.
-- **OpenTelemetry tracing** — distributed traces across frontend → backend → LLM → worker for end-to-end visibility.
-- **Alert rules** — error rate > 5% triggers email/Slack via webhook.
+### Short-term (low effort, high impact)
+
+- **Docker build caching** — Added BuildKit cache mounts for pip/npm (completed). Further: pre-build a base image with heavy deps to cut cold-start build from minutes to seconds.
+- **Gemini rate limit UX** — Free tier quotas are aggressive (429s common). Added clear error messages instead of silent failures (completed). Next: frontend toast notification when a provider is unavailable.
+- **Smaller spaCy model** — Switched from `en_core_web_lg` (800MB) to `en_core_web_sm` (12MB). Fine for Presidio PII detection (completed).
+- **`.dockerignore`** — Excluding `.git`, `__pycache__`, etc. from build context cuts context transfer time significantly (completed).
+- **Backend tests** — Pytest + pytest-asyncio on the SDK wrapper, providers, and API routes.
+- **Frontend error states** — Loading spinners, error banners, retry buttons for failed LLM calls.
+
+### Medium-term (engineering investment)
+
+- **ClickHouse for analytics at scale** — At >10M logs/day, PostgreSQL percentiles get slow. ClickHouse is purpose-built for this.
+- **OpenTelemetry tracing** — Distributed traces across frontend → backend → LLM → worker for end-to-end visibility.
+- **Alert rules** — Error rate > 5% triggers email/Slack via webhook.
 - **Conversation search** — pgvector embeddings for semantic search across chat history.
-- **Rate limiting** — per-user, per-session token buckets to prevent abuse.
-- **Log sampling** — only log 10% of requests above a latency threshold for cost control.
-- **Kafka migration** — guaranteed delivery, replay capability, better partitioning for high throughput.
-- **Kubernetes Helm chart** — parameterized deployment with auto-scaling policies.
+- **Rate limiting** — Per-user, per-session token buckets to prevent abuse. Provider-level circuit breakers (stop sending to Gemini after N consecutive 429s).
+- **Log sampling** — Only log 10% of requests above a latency threshold for cost control.
+- **Provider health dashboard** — Per-provider uptime, latency percentiles, error breakdowns. Auto-disable providers that cross error thresholds.
+
+### Long-term (production readiness)
+
+- **Kafka migration** — Guaranteed delivery, replay capability, better partitioning for high throughput.
+- **Kubernetes Helm chart** — Parameterized deployment with auto-scaling policies.
 - **Authentication** — OAuth or API keys for multi-user access.
+- **CI/CD pipeline** — GitHub Actions: lint → test → build Docker images → push to registry.
+- **Multi-language PII** — Extend Presidio with non-English models for international use.
+- **Cost tracking** — Per-request token cost estimation across providers. Dashboard for spend over time.
+
+## Deployment Options
+
+This project is currently local-only via Docker Compose. Here are the paths to production:
+
+| Option | Effort | Best for |
+|--------|--------|----------|
+| **Cloudflare Tunnel** | Low | Expose local Docker to a domain without opening ports. Use `cloudflared tunnel` to route `localhost:3000` to a public URL. Good for demos. |
+| **VPS (Hetzner / DigitalOcean)** | Medium | `docker-compose` on a $5-10/month VM. Add nginx reverse proxy + Let's Encrypt. 99% uptime, full control. |
+| **Fly.io / Railway** | Medium | Git-push deploy. Managed PostgreSQL + Redis add-ons. Good DX, fair free tier. |
+| **Google Cloud Run** | Medium | Serverless containers. Scales to zero. Pay-per-request. Needs Cloud SQL for PostgreSQL. |
+| **Kubernetes (self-hosted)** | High | Use included `k8s/all.yaml` manifests on a k3s/microk8s cluster. Full orchestration, auto-healing, rolling updates. |
+
+For an interview project, Cloudflare Tunnel or a $5 VPS are the practical choices — both can be set up in under an hour.
 
 ## Scaling Considerations
 
@@ -171,6 +205,6 @@ Full interactive docs at `http://localhost:8000/docs` after starting.
 | Database | PostgreSQL 15 with asyncpg |
 | Queue | Redis 7 + Python RQ |
 | PII | Microsoft Presidio (analyzer + anonymizer) |
-| NLP | spaCy (en_core_web_lg) |
+| NLP | spaCy (en_core_web_sm) |
 | Containerization | Docker, Docker Compose |
 | Orchestration | Kubernetes (optional, manifests included) |

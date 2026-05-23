@@ -1,5 +1,6 @@
 from typing import Optional
 from presidio_analyzer import AnalyzerEngine
+from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_anonymizer import AnonymizerEngine
 
 _analyzer: Optional[AnalyzerEngine] = None
@@ -10,7 +11,9 @@ REPLACEMENT_MAP = {"EMAIL_ADDRESS": "<EMAIL>", "PHONE_NUMBER": "<PHONE>", "CREDI
 
 def _get_analyzer():
     global _analyzer
-    if _analyzer is None: _analyzer = AnalyzerEngine()
+    if _analyzer is None:
+        nlp_config = {"nlp_engine_name": "spacy", "models": [{"lang_code": "en", "model_name": "en_core_web_sm"}]}
+        _analyzer = AnalyzerEngine(nlp_engine=NlpEngineProvider(nlp_configuration=nlp_config).create_engine())
     return _analyzer
 
 def _get_anonymizer():
